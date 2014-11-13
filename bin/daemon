@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+POLL_INTERVAL_IN_SECONDS=15
+
+AUTH_TOKEN="paste your HipChat API auth token here"
+
+ROOM_ID="paste your HipChat room ID here"
+
+BASEURL="http://example.com/jenkins"
+
+# See http://www.youtube.com/watch?v=t6IJu3uLZOs
+TREE_QUERY="jobs[name,url,builds[number,building,duration,estimatedDuration,timestamp,result,actions[parameters[name,value],causes[shortDescription]]]]"
+
+RESPONSE="/tmp/$ROOM_ID-jenkins-response.json"
+NEW="/tmp/$ROOM_ID-jenkins-new"
+OLD="/tmp/$ROOM_ID-jenkins-old"
+
+rm -f $NEW $OLD $RESPONSE &> /dev/null
+
+while [ 1 == 1 ]; do
+
+    curl -s --globoff "$BASEURL/api/json?tree=$TREE_QUERY" > $RESPONSE
+
+    jq --raw-output \
+        '([.jobs[] |
+     .name as $job |
+     .url as $link |
+     .builds[] |
+     [$job,
+       $link,
+       .number,
+       .actions[0].parameters[0].value,
+       (.result // "is running")]]) |
+  .[] |
+  .[0] as $name |
+  .[1] as $joburl |
+  .[2] as $number |
+  .[3] as $param |
+  .[4] as $status |
+  @text "\($param) \($name) #\($number) \($status) \($joburl)\($number)/console"' \
+      $RESPONSE > $NEW
+
+    test -f $OLD || cp $NEW $OLD
+
+    diff $OLD $NEW | egrep '^>' | cut -c3- | head -n4 | \
+        xargs -I @ curl -H "Content-type: application/json" \
+        -H "Authorization: Bearer $AUTH_TOKEN" \
+        -X POST \
+        -d "{\"color\": \"yellow\",
+         \"message_format\": \"text\",
+         \"message\": \"@\"}" \
+             https://api.hipchat.com/v2/room/$ROOM_ID/notification
+
+    cp $NEW $OLD
+
+    sleep $POLL_INTERVAL_IN_SECONDS
+done
