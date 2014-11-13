@@ -4,9 +4,14 @@
 
     $ bin/daemon
 
-Before doing so for the first time you must update the three
+Before launching the daemon for the first time you must update the three
 environment variables at the top of the file: AUTH_TOKEN, ROOM_ID and
 BASEURL.
+
+Press control-C to kill the daemon. If you want a long-lived daemon
+then run your terminal session inside of GNU screen or `tmux`.
+
+Find me on Twitter `@noahsussman` if you get stuck!
 
 ## Notes
 
